@@ -1,71 +1,43 @@
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.so
-*.egg-info/
-.eggs/
-.build/
-dist/
-pip-wheel-metadata/
-.venv/
+cat >> .gitignore <<'EOF'
+# env & creds
 .env
-.env.*.local
+.env.local
+*.pem
+*.p12
+token.json
 
-# Virtualenvs
-venv/
-ENV/
-env/
-.venv*/
-env*/
 
-# Logs & runtime
+# runtime junk
+tmp/
+__pycache__/
+*.pyc
 *.log
-logs/
-celerybeat-schedule
-*.pid
-*.pid.lock
 
-# Mac/OS
-.DS_Store
-.AppleDouble
-.LSOverride
-Icon?
-._*
-
-# IDE
+# venv & IDE
+.venv/
 .idea/
 .vscode/
-.pytest_cache/
-.mypy_cache/
-.pyre/
-.pytype/
-
-# Coverage
-htmlcov/
-.tox/
-.coverage
-coverage.xml
-*.cover
-.hypothesis/
-
-# Data & temp
-tmp/
-temp/
-cache/
+EOF
+secrets/service_account.json
+# Secrets & creds
 secrets/
-downloads/
-artifacts/
-
-# Node/Front-end (in case Streamlit/JS bits appear)
-node_modules/
-*.map
-
-# Docker
-**/.dockerignore
-*.iml
-
-# Misc
-*.swp
-*.swo
+token.json
+credentials.json
+.env
+.env.local
+.env
+.env.local
+secrets/
+token.json
+credentials.json
+.venv/
+.idea/
+.vscode/
+tmp/
+__pycache__/
+*.pyc
+secrets/
+.env
+secrets/
+.env
+token.json

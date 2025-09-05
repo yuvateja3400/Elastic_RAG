@@ -1,0 +1,2 @@
+chmod +x scripts/dev_up.sh
+./scripts/dev_up.sh
