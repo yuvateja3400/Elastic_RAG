@@ -14,3 +14,9 @@ tenacity==9.0.0
 fastapi==0.114.1
 uvicorn[standard]==0.30.6
 requests==2.32.3
+elasticsearch==8.15.1
+urllib3<3
+
+# FR2: dense embeddings
+sentence-transformers==3.0.1
+numpy==1.26.4
