@@ -20,3 +20,6 @@ urllib3<3
 # FR2: dense embeddings
 sentence-transformers==3.0.1
 numpy==1.26.4
+huggingface_hub>=0.24,<0.25
+pydantic>=2.7,<3
+requests

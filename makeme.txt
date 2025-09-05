@@ -1,0 +1,59 @@
+-include .env
+
+ELASTIC_URL ?= http://localhost:9200
+ELASTIC_USERNAME ?= elastic
+ELASTIC_PASSWORD ?= changeme
+ELASTIC_INDEX_NAME ?= rag_documents_v1
+API_PORT ?= 8000
+UI_PORT ?= 8501
+OLLAMA_MODEL ?= phi3:mini
+DOCS_DIR ?= ./data/pdfs
+
+.PHONY: up down ps logs health bootstrap-es ingest api ui dev kill-dev reindex clean-index
+
+up:
+	docker compose up -d elasticsearch
+
+down:
+	docker compose down
+
+ps:
+	docker compose ps
+
+logs:
+	docker compose logs -f elasticsearch
+
+health:
+	curl -s -u "$(ELASTIC_USERNAME):$(ELASTIC_PASSWORD)" "$(ELASTIC_URL)/_cluster/health?pretty"
+
+# Bootstrap index + ELSER endpoint + ingest pipeline
+bootstrap-es:
+	bash scripts/bootstrap_es.sh
+
+# Ingest local PDFs (uses .env DOCS_DIR)
+ingest:
+	python -m scripts.ingest_drive_folder --index --limit 200
+
+# Run API only
+api:
+	uvicorn app.api.main:app --host 0.0.0.0 --port $(API_PORT) --reload
+
+# Run UI only
+ui:
+	streamlit run app/ui/streamlit_app.py --server.port $(UI_PORT)
+
+# One-liner dev (Ollama + API + UI)
+dev:
+	chmod +x dev.sh && ./dev.sh
+
+kill-dev:
+	tmux kill-session -t rag-dev || true
+
+# Apply ELSER pipeline to all docs that have 'text'
+reindex:
+	curl -u "$(ELASTIC_USERNAME):$(ELASTIC_PASSWORD)" -H 'Content-Type: application/json' \
+	  -X POST "$(ELASTIC_URL)/$(ELASTIC_INDEX_NAME)/_update_by_query?pipeline=elser_v2_pipeline&conflicts=proceed&slices=auto" \
+	  -d '{"query":{"exists":{"field":"text"}}}'
+
+clean-index:
+	curl -s -u "$(ELASTIC_USERNAME):$(ELASTIC_PASSWORD)" -X DELETE "$(ELASTIC_URL)/$(ELASTIC_INDEX_NAME)" || true
