@@ -5,7 +5,7 @@ cat >> .gitignore <<'EOF'
 *.pem
 *.p12
 token.json
-credentials.json
+
 
 # runtime junk
 tmp/
@@ -18,3 +18,4 @@ __pycache__/
 .idea/
 .vscode/
 EOF
+secrets/service_account.json
