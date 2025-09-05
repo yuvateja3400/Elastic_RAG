@@ -1,0 +1,71 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+.build/
+dist/
+pip-wheel-metadata/
+.venv/
+.env
+.env.*.local
+
+# Virtualenvs
+venv/
+ENV/
+env/
+.venv*/
+env*/
+
+# Logs & runtime
+*.log
+logs/
+celerybeat-schedule
+*.pid
+*.pid.lock
+
+# Mac/OS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# IDE
+.idea/
+.vscode/
+.pytest_cache/
+.mypy_cache/
+.pyre/
+.pytype/
+
+# Coverage
+htmlcov/
+.tox/
+.coverage
+coverage.xml
+*.cover
+.hypothesis/
+
+# Data & temp
+tmp/
+temp/
+cache/
+secrets/
+downloads/
+artifacts/
+
+# Node/Front-end (in case Streamlit/JS bits appear)
+node_modules/
+*.map
+
+# Docker
+**/.dockerignore
+*.iml
+
+# Misc
+*.swp
+*.swo
