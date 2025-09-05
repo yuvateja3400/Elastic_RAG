@@ -25,3 +25,14 @@ token.json
 credentials.json
 .env
 .env.local
+.env
+.env.local
+secrets/
+token.json
+credentials.json
+.venv/
+.idea/
+.vscode/
+tmp/
+__pycache__/
+*.pyc
