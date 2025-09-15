@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.15.2
@@ -7,19 +5,21 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=true
+      # dev only: keep TLS off on http/transport so curl works easily
+      - xpack.security.http.ssl.enabled=false
+      - xpack.security.transport.ssl.enabled=false
       - xpack.license.self_generated.type=trial
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
-      # Adjust heap if your RAM is tight (2g is comfy for dev)
-      - ES_JAVA_OPTS=-Xms1g -Xmx1g
-    ports:
-      - "9200:9200"
+      # give ES some headroom (ELSER needs ~420MB, heap 2g is comfy)
+      - ES_JAVA_OPTS=-Xms2g -Xmx2g
+    ports: ["9200:9200"]
     volumes:
       - esdata:/usr/share/elasticsearch/data
     healthcheck:
       test: ["CMD-SHELL", "curl -sf -u elastic:${ELASTIC_PASSWORD} http://localhost:9200 >/dev/null || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 30
+      retries: 40
 
   kibana:
     image: docker.elastic.co/kibana/kibana:8.15.2
@@ -29,10 +29,12 @@ services:
         condition: service_healthy
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-      - ELASTICSEARCH_SERVICEACCOUNTTOKEN=${KIBANA_SERVICE_ACCOUNT_TOKEN}
+      - ELASTICSEARCH_SERVICEACCOUNTTOKEN=AAEAAWVsYXN0aWMva2liYW5hL2tpYmFuYS1sb2NhbDpkLW1RLWppNlFYV2p4QjR3YVhTUUtR
       - SERVER_PUBLICBASEURL=http://localhost:5601
-    ports:
-      - "5601:5601"
+    ports: ["5601:5601"]
 
 volumes:
   esdata:
+
+
+

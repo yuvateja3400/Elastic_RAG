@@ -1,2 +1,56 @@
 chmod +x scripts/dev_up.sh
 ./scripts/dev_up.sh
+
+curl -u elastic:yuvateja \
+  -X POST "http://localhost:9200/rag_documents_v1/_delete_by_query?conflicts=proceed&refresh=true" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": { "match_all": {} }
+  }'
+
+Where the ELSER tokens come from (important)
+
+You created an ingest pipeline on the server (one-time cURL) and set it as the index’s index.default_pipeline:
+
+Pipeline: elser_v2_pipeline
+
+Definition: runs the .elser_model_2 text_expansion inference and writes results to ml.tokens:
+
+{
+  "description": "ELSER v2: write rank_features to ml.tokens from text",
+  "processors": [
+    {
+      "inference": {
+        "model_id": ".elser_model_2",
+        "inference_config": { "text_expansion": { "results_field": "tokens" } },
+        "field_map":   { "text": "text" },  // read doc's 'text'
+        "target_field":"ml"                 // write to 'ml.tokens'
+      }
+    }
+  ]
+}
+
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.2
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - xpack.license.self_generated.type=trial
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      # Adjust heap if your RAM is tight (2g is comfy for dev)
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -u elastic:${ELASTIC_PASSWORD} http://localhost:9200 >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+
+ curl -u elastic:yuvateja "http://localhost:9200/_tasks?detailed=true&actions=*update_by_query"
+ {"task":"B6BprlmpSfehpGUOKxtHmQ:29667"}%

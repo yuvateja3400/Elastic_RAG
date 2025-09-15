@@ -1,73 +1,61 @@
-#!/usr/bin/env bash
-set -euo pipefail
+import os
+from elasticsearch import Elasticsearch
 
-ES_URL="${ELASTIC_URL:-http://localhost:9200}"
-ES_USER="${ELASTIC_USERNAME:-elastic}"
-ES_PASS="${ELASTIC_PASSWORD:-changeme}"
-INDEX="${ELASTIC_INDEX_NAME:-rag_documents_v1}"
-ELSER_EP="${ELSER_ENDPOINT_ID:-elser_v2_endpoint}"
-PIPELINE="${ELSER_PIPELINE_ID:-elser_v2_pipeline}"
+ES_URL = os.getenv("ELASTIC_URL", "http://localhost:9200")
+ES_USER = os.getenv("ELASTIC_USERNAME", "elastic")
+ES_PASS = os.getenv("ELASTIC_PASSWORD", "changeme")
+INDEX   = os.getenv("ELASTIC_INDEX_NAME", "rag_documents_v1")
+PIPE_ID = os.getenv("ELSER_PIPELINE_ID", "elser_v2_pipeline")
 
-auth=(-u "$ES_USER:$ES_PASS" -H "Content-Type: application/json")
+es = Elasticsearch(ES_URL, basic_auth=(ES_USER, ES_PASS), request_timeout=60)
 
-echo "1) Create index: $INDEX"
-curl -sS "${auth[@]}" -X PUT "$ES_URL/$INDEX" \
-  -d @- <<'JSON'
-{
+# 1) Create index with mapping (idempotent)
+mapping = {
   "mappings": {
     "properties": {
-      "text": { "type": "text" },
-      "vector": {
-        "type": "dense_vector",
-        "dims": 384,
-        "index": true,
-        "similarity": "cosine"
-      },
+      "chunk_id":   {"type":"keyword"},
+      "drive_url":  {"type":"keyword"},
+      "file_id":    {"type":"keyword"},
+      "filename":   {"type":"keyword"},
+      "ingested_at":{"type":"date"},
+      "page_start": {"type":"integer"},
+      "page_end":   {"type":"integer"},
+      "text":       {"type":"text"},
       "ml": {
         "properties": {
-          "tokens": { "type": "sparse_vector" }
+          "model_id": {"type":"keyword"},
+          "tokens":   {"type":"rank_features"}
         }
       },
-      "file_id":   { "type": "keyword" },
-      "filename":  { "type": "keyword" },
-      "drive_url": { "type": "keyword" },
-      "chunk_id":  { "type": "keyword" },
-      "page_start":{ "type": "integer" },
-      "page_end":  { "type": "integer" },
-      "ingested_at": { "type": "date" }
+      "vector": {
+        "type":"dense_vector", "dims":384, "index":True, "similarity":"cosine",
+        "index_options":{"type":"int8_hnsw","m":16,"ef_construction":100}
+      }
     }
   }
 }
-JSON
-echo
 
-echo "2) Create ELSER inference endpoint (auto-download .elser_model_2) → $ELSER_EP"
-curl -sS "${auth[@]}" -X PUT "$ES_URL/_inference/sparse_embedding/$ELSER_EP" \
-  -d '{
-    "service": "elasticsearch",
-    "service_settings": {
-      "adaptive_allocations": { "enabled": true, "min_number_of_allocations": 1, "max_number_of_allocations": 2 },
-      "num_threads": 1,
-      "model_id": ".elser_model_2"
+if not es.indices.exists(index=INDEX):
+    es.indices.create(index=INDEX, **mapping)
+
+# 2) Upsert pipeline (idempotent)
+pipeline = {
+  "description": "ELSER v2: write rank_features to ml.tokens from text",
+  "processors": [{
+    "inference": {
+      "model_id": ".elser_model_2",
+      "inference_config": { "text_expansion": { "results_field": "tokens" } },
+      "field_map": { "text": "text" },
+      "target_field": "ml"
     }
-  }'
-echo
+  }]
+}
+es.ingest.put_pipeline(id=PIPE_ID, processors=pipeline["processors"],
+                       description=pipeline["description"])
 
-echo "3) Create ingest pipeline to write ELSER tokens into ml.tokens"
-curl -sS "${auth[@]}" -X PUT "$ES_URL/_ingest/pipeline/$PIPELINE" \
-  -d "{
-    \"description\": \"ELSER v2 tokens -> ml.tokens from text\",
-    \"processors\": [
-      {
-        \"inference\": {
-          \"model_id\": \"$ELSER_EP\",
-          \"input_output\": [
-            { \"input_field\": \"text\", \"output_field\": \"ml.tokens\" }
-          ]
-        }
-      }
-    ]
-  }"
-echo
+# 3) Attach pipeline as default (idempotent)
+es.indices.put_settings(index=INDEX, settings={
+  "index": { "default_pipeline": PIPE_ID }
+})
 
-echo "✅ Bootstrap complete."
+print("Bootstrap complete:", INDEX, PIPE_ID)

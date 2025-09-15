@@ -38,7 +38,7 @@ def short_snippet(cite: dict, max_len: int = 240) -> str:
     s = " ".join(s.split())
     return (s[:max_len] + "…") if len(s) > max_len else s
 
-# ---- Sidebar ----
+# --- Sidebar ---
 with st.sidebar:
     st.markdown("## ⚙️ Settings")
     st.text_input("API Base URL", value=DEFAULT_API_BASE, key="api_base")
@@ -48,13 +48,58 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("### 🩺 Health")
+
     hc = healthcheck()
     if "error" in hc:
         st.error(f"API unreachable: {hc['error']}")
     else:
-        es_ok = hc.get("elasticsearch")
-        ol_ok = hc.get("ollama")
-        st.write(f"Elasticsearch: {'✅' if es_ok else '❌'}  |  Ollama: {'✅' if ol_ok else '❌'}")
+        es = hc.get("elasticsearch") or {}
+        es_ok = es.get("ok", False)
+        ollama_ok = hc.get("ollama", False)
+
+        # Status pill
+        status = (es.get("status") or "").lower()
+        pill = {
+            "green": "🟢",
+            "yellow": "🟡",
+            "red": "🔴",
+        }.get(status, "⚪️")
+
+        left, right = st.columns([0.7, 0.3])
+        with left:
+            if es_ok:
+                st.markdown(
+                    f"**Elasticsearch** {pill}  "
+                    f"`{es.get('cluster_name') or 'unknown-cluster'}`  "
+                    f"({status or 'unknown'})"
+                )
+            else:
+                st.markdown("**Elasticsearch** ✅")
+
+        with right:
+            st.markdown(f"**Ollama** {'✅' if ollama_ok else '❌'}")
+
+        if es_ok:
+            # Quick facts table
+            st.caption("Cluster info")
+            c1, c2 = st.columns(2)
+            with c1:
+                st.write(f"Version: `{es.get('version') or '—'}`")
+                st.write(f"Nodes: `{es.get('number_of_nodes') if es.get('number_of_nodes') is not None else '—'}`")
+            with c2:
+                st.write(f"Primary shards: `{es.get('active_primary_shards') if es.get('active_primary_shards') is not None else '—'}`")
+                st.write(f"Active shards: `{es.get('active_shards') if es.get('active_shards') is not None else '—'}`")
+                if es.get("unassigned_shards") is not None:
+                    st.write(f"Unassigned shards: `{es['unassigned_shards']}`")
+
+            # Cloud extras if present
+            cloud = es.get("cloud") or {}
+            if any(cloud.values()):
+                st.caption("Elastic Cloud")
+                region = cloud.get("region") or "—"
+                dep_id = cloud.get("deployment_id") or "—"
+                st.write(f"Region: `{region}`")
+                st.write(f"Deployment ID: `{dep_id}`")
 
     with st.expander("Re-ingest (optional)"):
         limit = st.number_input("Limit", min_value=1, max_value=1000, value=20, step=1)
@@ -69,6 +114,7 @@ with st.sidebar:
                     st.error(f"Ingest failed: {e.response.text}")
                 except Exception as e:
                     st.error(f"Ingest failed: {e}")
+
 
 # ---- Main ----
 st.title("📚 Elastic RAG — QA")

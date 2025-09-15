@@ -89,43 +89,72 @@ def index_chunks(chunks: List[Chunk]) -> Dict[str, Any]:
       - ml.tokens (ELSER via ingest pipeline)
     """
     if not chunks:
-        return {"indexed": 0}
+        return {"indexed": 0, "errors": 0}
 
     es = make_es()
     index = os.getenv("ELASTIC_INDEX_NAME", "rag_documents_v1")
     pipeline = os.getenv("ELSER_PIPELINE_ID", "elser_v2_pipeline")
 
-    dense = embed_texts([c.text for c in chunks])  # batch embed
+    # Embed in one go (your embedder already batches internally if needed)
+    dense_vectors = embed_texts([c.text for c in chunks])
 
     actions = []
-    for c, v in zip(chunks, dense):
-        doc = {
-            "text": c.text,
-            "vector": v,
-            "file_id": c.file_id,
-            "filename": c.filename,
-            "drive_url": c.drive_url,
-            "chunk_id": c.chunk_id,
-            "page_start": c.page_start,
-            "page_end": c.page_end,
-            "ingested_at": c.ingested_at,
-        }
-        actions.append(
-            {
-                "_op_type": "index",
-                "_index": index,
-              #  "pipeline": pipeline,
-                "_id": c.chunk_id,
-                "_source": doc,
-            }
-        )
+    for c, v in zip(chunks, dense_vectors):
+        # NOTE: we set the ingest pipeline per op so ELSER writes ml.tokens
+        actions.append({
+            "_op_type": "index",
+            "_index": index,
+            "_id": c.chunk_id,
+            "pipeline": pipeline,
+            "_source": {
+                "text": c.text,
+                "vector": v,
+                "file_id": c.file_id,
+                "filename": c.filename,
+                "drive_url": c.drive_url,
+                "chunk_id": c.chunk_id,
+                "page_start": c.page_start,
+                "page_end": c.page_end,
+                "ingested_at": c.ingested_at,
+            },
+        })
 
-    ok, resp = helpers.bulk(
+    # Tunables via env (good defaults for Elastic Cloud)
+    chunk_size       = int(os.getenv("INDEX_BULK_CHUNK", "100"))
+    request_timeout  = int(os.getenv("INDEX_REQUEST_TIMEOUT", "120"))
+    max_retries      = int(os.getenv("INDEX_MAX_RETRIES", "2"))
+    initial_backoff  = float(os.getenv("INDEX_BACKOFF", "0.5"))
+
+    indexed = 0
+    errors = 0
+
+    # streaming_bulk + refresh="wait_for": data is searchable when we return
+    for ok, info in helpers.streaming_bulk(
         es,
         actions,
-        request_timeout=600,  # more generous for first run
-        chunk_size=50  # smaller batches avoid long single waits
-    )
-    # helpers.bulk returns (success_count, details). On some versions resp isn't a dict; handle safely.
-    took = resp.get("took") if isinstance(resp, dict) else None
-    return {"indexed": ok, "took": took}
+        chunk_size=chunk_size,
+        request_timeout=request_timeout,
+        max_retries=max_retries,
+        initial_backoff=initial_backoff,
+        yield_ok=True,
+        raise_on_error=False,
+        raise_on_exception=False,
+        refresh="wait_for",
+    ):
+        if ok:
+            indexed += 1
+        else:
+            errors += 1
+            try:
+                cause = info.get("index", {}).get("error") or info
+                print(f"[bulk] failed id={info.get('index', {}).get('_id')} reason={cause}")
+            except Exception:
+                print(f"[bulk] failed item: {info}")
+
+    # Best-effort final refresh
+    try:
+        es.indices.refresh(index=index)
+    except Exception:
+        pass
+
+    return {"indexed": indexed, "errors": errors}

@@ -2,7 +2,7 @@
 
 ELASTIC_URL ?= http://localhost:9200
 ELASTIC_USERNAME ?= elastic
-ELASTIC_PASSWORD ?= changeme
+ELASTIC_PASSWORD ?= yuvateja
 ELASTIC_INDEX_NAME ?= rag_documents_v1
 API_PORT ?= 8000
 UI_PORT ?= 8501
